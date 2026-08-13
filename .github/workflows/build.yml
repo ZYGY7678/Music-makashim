@@ -11,6 +11,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Unzip project
+        run: |
+          unzip -o MusicApp_widget_exact_art.zip -d extracted
+          mv extracted/*/* . 2>/dev/null || mv extracted/* .
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
