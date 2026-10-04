@@ -310,7 +310,7 @@ static void readStringProperty(IPropertyStore *store, REFPROPERTYKEY key, wchar_
     if (!store) return;
     PROPVARIANT pv;
     PropVariantInit(&pv);
-    if (SUCCEEDED(store->lpVtbl->GetValue(store, &key, &pv)))
+    if (SUCCEEDED(store->lpVtbl->GetValue(store, key, &pv)))
         propVariantToText(&pv, out, outCap);
     PropVariantClear(&pv);
 }
@@ -320,19 +320,19 @@ static void readMusicMetadata(const wchar_t *path, Song *s) {
     s->conductor[0] = s->contentGroup[0] = s->publisher[0] = s->subtitle[0] = 0;
     s->writer[0] = s->producer[0] = 0;
     IPropertyStore *store = NULL;
-    HRESULT hr = SHGetPropertyStoreFromParsingName(path, NULL, GPS_BESTEFFORT, IID_PPV_ARGS(&store));
+    HRESULT hr = SHGetPropertyStoreFromParsingName(path, NULL, GPS_BESTEFFORT, &IID_IPropertyStore, (void **)&store);
     if (SUCCEEDED(hr) && store) {
-        readStringProperty(store, PKEY_Title, s->metaTitle, MAX_PATH);
-        readStringProperty(store, PKEY_Music_Artist, s->artist, MAX_PATH);
-        readStringProperty(store, PKEY_Music_AlbumTitle, s->album, MAX_PATH);
-        readStringProperty(store, PKEY_Music_AlbumArtist, s->albumArtist, MAX_PATH);
-        readStringProperty(store, PKEY_Music_Composer, s->composer, MAX_PATH);
-        readStringProperty(store, PKEY_Music_Conductor, s->conductor, MAX_PATH);
-        readStringProperty(store, PKEY_Music_ContentGroupDescription, s->contentGroup, MAX_PATH);
-        readStringProperty(store, PKEY_Media_Publisher, s->publisher, MAX_PATH);
-        readStringProperty(store, PKEY_Media_SubTitle, s->subtitle, MAX_PATH);
-        readStringProperty(store, PKEY_Media_Writer, s->writer, MAX_PATH);
-        readStringProperty(store, PKEY_Media_Producer, s->producer, MAX_PATH);
+        readStringProperty(store, &PKEY_Title, s->metaTitle, MAX_PATH);
+        readStringProperty(store, &PKEY_Music_Artist, s->artist, MAX_PATH);
+        readStringProperty(store, &PKEY_Music_AlbumTitle, s->album, MAX_PATH);
+        readStringProperty(store, &PKEY_Music_AlbumArtist, s->albumArtist, MAX_PATH);
+        readStringProperty(store, &PKEY_Music_Composer, s->composer, MAX_PATH);
+        readStringProperty(store, &PKEY_Music_Conductor, s->conductor, MAX_PATH);
+        readStringProperty(store, &PKEY_Music_ContentGroupDescription, s->contentGroup, MAX_PATH);
+        readStringProperty(store, &PKEY_Media_Publisher, s->publisher, MAX_PATH);
+        readStringProperty(store, &PKEY_Media_SubTitle, s->subtitle, MAX_PATH);
+        readStringProperty(store, &PKEY_Media_Writer, s->writer, MAX_PATH);
+        readStringProperty(store, &PKEY_Media_Producer, s->producer, MAX_PATH);
         store->lpVtbl->Release(store);
     }
 }
@@ -1487,6 +1487,14 @@ static void runOrganizer(const wchar_t *sourcePath, const wchar_t *destPath, int
     if (errorCount > 0)
         logLineW(L"שגיאות: %d", errorCount);
 }
+
+typedef struct {
+    wchar_t sourcePath[MAX_PATH];
+    wchar_t destPath[MAX_PATH];
+    int moveMode;
+    int aiMode;
+    wchar_t apiKey[256];
+} WorkerArgs;
 
 static DWORD WINAPI workerThread(LPVOID param) {
     WorkerArgs *args = (WorkerArgs *)param;
