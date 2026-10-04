@@ -1603,6 +1603,46 @@ static UINT_PTR g_animTimer = 0; /* Animation timer ID */
 typedef struct { wchar_t sourcePath[MAX_PATH]; wchar_t destPath[MAX_PATH]; int moveMode; int aiMode; wchar_t apiKey[256]; } WorkerArgs;
 
 
+/* thread-safe log: format on caller thread, marshal a heap copy to the UI thread */
+static void logLineW(const wchar_t *fmt, ...) {
+    wchar_t buf[1024];
+    va_list args;
+    va_start(args, fmt);
+    vswprintf(buf, 1024, fmt, args);
+    va_end(args);
+    wchar_t *copy = _wcsdup(buf);
+    PostMessage(g_hMain, WM_APP_LOGLINE, 0, (LPARAM)copy);
+}
+
+static void setProgress(int value, int max) {
+    PostMessage(g_hMain, WM_APP_PROGRESS, (WPARAM)value, (LPARAM)max);
+}
+
+/* Bar 2: "creating and sorting folders" - tracked separately from the copy
+ * bar above so the phase after copying (which used to leave the single old
+ * progress bar sitting motionless) shows its own visible progress. */
+static void setProgressFolders(int value, int max) {
+    PostMessage(g_hMain, WM_APP_PROGRESS_FOLDERS, (WPARAM)value, (LPARAM)max);
+}
+
+/* Bar 3: overall run progress, spanning every phase, so there's always one
+ * bar that reads "how much of the whole run is left" regardless of which
+ * phase is currently active. */
+static void setProgressOverall(int value, int max) {
+    PostMessage(g_hMain, WM_APP_PROGRESS_OVERALL, (WPARAM)value, (LPARAM)max);
+}
+
+/* Marshals "currently copying <title>" (or NULL to clear it) to the UI
+ * thread. Called from the worker thread just before each file's copy/move
+ * begins, so the on-screen label always reflects the file actually in
+ * flight - the same file the skip button would abort. */
+static void setCurrentFile(const wchar_t *title) {
+    wchar_t *copy = title ? _wcsdup(title) : NULL;
+    PostMessage(g_hMain, WM_APP_CURRENT, 0, (LPARAM)copy);
+}
+
+static DWORD WINAPI workerThread(LPVOID param) {
+
 static DWORD WINAPI workerThread(LPVOID param) {
     WorkerArgs *args = (WorkerArgs *)param;
     if (args->aiMode) runOrganizerByAI(args->sourcePath, args->destPath, args->moveMode, args->apiKey);
