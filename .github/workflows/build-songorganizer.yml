@@ -3,6 +3,8 @@ name: Build SongOrganizer (Windows)
 on:
   push:
     branches: [ songorganizer-build-20261004 ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
