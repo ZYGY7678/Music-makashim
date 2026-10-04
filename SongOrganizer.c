@@ -1,4 +1,5 @@
 // SongOrganizer - Windows GUI version
+// Build validation 2026-10-04
 // Scans a folder (e.g. an SD card drive letter) for audio files, copies/moves
 // them into a root "כל השירים" folder. It indexes filenames and embedded music
 // metadata, detects repeated names/phrases, asks the user which unknown repeats
