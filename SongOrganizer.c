@@ -23,6 +23,7 @@
 #include <wctype.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdarg.h>
 
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "shell32.lib")
@@ -1488,13 +1489,119 @@ static void runOrganizer(const wchar_t *sourcePath, const wchar_t *destPath, int
         logLineW(L"שגיאות: %d", errorCount);
 }
 
-typedef struct {
-    wchar_t sourcePath[MAX_PATH];
-    wchar_t destPath[MAX_PATH];
-    int moveMode;
-    int aiMode;
-    wchar_t apiKey[256];
-} WorkerArgs;
+/* ============================= GUI layer ============================= */
+/* Redesigned: light lavender canvas, white "card" panels with soft borders,
+   an indigo gradient header, a pill-style segmented control for copy/move,
+   and gradient-filled rounded buttons. Layout is computed once per resize
+   in layoutCardRects() and reused both to position child controls and to
+   paint the card backgrounds behind them. */
+
+#pragma comment(lib, "msimg32.lib")
+
+#define IDC_DRIVE_COMBO   1001
+#define IDC_PATH_EDIT     1002
+#define IDC_BROWSE_BTN    1003
+#define IDC_COPY_RADIO    1004
+#define IDC_MOVE_RADIO    1005
+#define IDC_START_BTN     1006
+#define IDC_LOG_EDIT      1007
+#define IDC_PROGRESS      1008
+#define IDC_GROUPBOX1     1009
+#define IDC_GROUPBOX2     1010
+#define IDC_LABEL1        1011
+#define IDC_EXCLUDE_LIST      1012
+#define IDC_EXCLUDE_ADD_BTN   1013
+#define IDC_EXCLUDE_REMOVE_BTN 1014
+#define IDC_EXCLUDE_LABEL     1015
+#define IDC_SKIP_BTN          1016
+#define IDC_CURRENT_LABEL     1017
+#define IDC_PROGRESS_LABEL         1019
+#define IDC_PROGRESS_FOLDERS       1020
+#define IDC_PROGRESS_FOLDERS_LABEL 1021
+#define IDC_PROGRESS_OVERALL       1022
+#define IDC_PROGRESS_OVERALL_LABEL 1023
+#define IDC_AI_CHECK          1024
+#define IDC_API_KEY_EDIT      1025
+
+#define WM_APP_LOGLINE   (WM_APP + 1)
+#define WM_APP_PROGRESS  (WM_APP + 2)
+#define WM_APP_DONE      (WM_APP + 3)
+#define WM_APP_CURRENT   (WM_APP + 4)
+#define WM_APP_PROGRESS_FOLDERS (WM_APP + 5)
+#define WM_APP_PROGRESS_OVERALL (WM_APP + 6)
+
+#define HEADER_H     80      /* Spacious header */
+#define FOOTER_H     30      /* Thin footer disclaimer bar */
+#define MARGIN       16      /* Generous margins */
+#define CARD_GAP     18      /* Breathing room between elements */
+#define CARD_RADIUS  16      /* Modern rounded corners */
+#define BTN_RADIUS   24      /* Pill-shaped primary button */
+#define MIN_COL_HEIGHT 520   /* none of the 3 dashboard columns gets shorter than
+                                 this - if the window isn't tall enough to fit
+                                 everything above this height, the body panel
+                                 scrolls instead of clipping the bottom off
+                                 (see g_hBody below) */
+#define SCROLL_STEP  40      /* pixels moved per scrollbar arrow click / wheel notch */
+
+/* Everything below the header (all five cards and their controls) lives
+ * inside g_hBody, a child window with its own vertical scrollbar. This is
+ * what used to be missing: the old version laid every card directly on the
+ * main window with no scrolling at all, so on a short window (small
+ * screen, non-maximized, high DPI scaling, or simply a user dragging it
+ * smaller) the lower cards - the start button, and especially the log -
+ * were silently clipped off the bottom with no way to reach them. Now the
+ * body panel scrolls (mouse wheel, scrollbar, or dragging the thumb)
+ * whenever the content is taller than the available space; it stays
+ * unscrollable (and the scrollbar auto-hides) whenever everything already
+ * fits, exactly like before. g_scrollY is how far the body's content is
+ * scrolled up, in pixels. */
+static HWND g_hBody;
+static int g_scrollY = 0;
+
+static HWND g_hDriveCombo, g_hPathEdit, g_hCopyRadio, g_hMoveRadio;
+static HWND g_hReviewWnd, g_hReviewList, g_hReviewOkBtn, g_hReviewLabel;
+
+static HWND g_hStartBtn, g_hLogEdit, g_hBrowseBtn;
+/* the 3 native progress-bar controls were replaced by hand-drawn donut
+   rings (see drawProgressRing / g_ringRect) - these 0-100 percentages are
+   all that's left to track, updated wherever PBM_SETPOS used to be called. */
+static int g_pctCopy = 0, g_pctFolders = 0, g_pctOverall = 0;
+static HWND g_hExcludeList, g_hExcludeAddBtn, g_hExcludeRemoveBtn, g_hExcludeLabel;
+static HWND g_hSrcLabel, g_hModeLabel, g_hCurrentLabel, g_hSkipBtn;
+static HWND g_hAiCheck, g_hApiKeyEdit;
+static HFONT g_hFont, g_hFontBold, g_hFontHeader, g_hFontSection, g_hFontSmall;
+static HBRUSH g_hBrushBg, g_hBrushPanel;
+
+/* ==== "Dashboard" THEME - light lavender-gray canvas with white cards, a
+ * dark navy header/footer, and an orange primary accent, matching the
+ * reference screenshot. ==== */
+static COLORREF g_clrBg          = RGB(0xF3, 0xF5, 0xFA); /* Light lavender-gray canvas */
+static COLORREF g_clrCard        = RGB(0xFF, 0xFF, 0xFF); /* White cards */
+static COLORREF g_clrCardBorder  = RGB(0xE4, 0xE7, 0xF0); /* Soft gray-blue borders */
+static COLORREF g_clrCardHover   = RGB(0xF7, 0xF8, 0xFC); /* Card hover state */
+static COLORREF g_clrAccent      = RGB(0xF4, 0x7C, 0x20); /* Orange (primary accent) */
+static COLORREF g_clrAccentDark  = RGB(0xD9, 0x63, 0x0C); /* Deep orange (pressed state) */
+static COLORREF g_clrAccentLight = RGB(0xFD, 0xEC, 0xDD); /* Light orange bg */
+static COLORREF g_clrHeaderTop   = RGB(0x1A, 0x28, 0x47); /* Dark navy header top */
+static COLORREF g_clrHeaderBot   = RGB(0x26, 0x3B, 0x66); /* Dark navy header bottom */
+static COLORREF g_clrText        = RGB(0x1C, 0x24, 0x33); /* Near-black text */
+static COLORREF g_clrTextMuted   = RGB(0x8A, 0x93, 0xA6); /* Muted gray */
+static COLORREF g_clrTextOnDark  = RGB(0xF3, 0xF6, 0xFD); /* High contrast white (on header/footer) */
+static COLORREF g_clrBorder      = RGB(0xE4, 0xE7, 0xF0); /* Soft gray-blue borders */
+static COLORREF g_clrWarn        = RGB(0xF4, 0x7C, 0x20); /* Orange (also used for warn/skip accents) */
+static COLORREF g_clrSuccess     = RGB(0x22, 0xC7, 0x8C); /* Emerald green (success) */
+static COLORREF g_clrWarnLight   = RGB(0xFD, 0xEC, 0xDD); /* Light orange bg */
+static COLORREF g_clrShadow      = RGB(0xE1, 0xE4, 0xEE); /* Soft light-gray card shadow */
+
+static int g_running = 0;
+static int g_moveMode = 0; /* 0 = copy, 1 = move - drives the segmented control */
+static int g_aiMode = 0; /* 1 = identify artist/album per song via the Gemini API instead */
+static wchar_t g_apiKey[256] = L""; /* Gemini API key, entered by the user in the mode card */
+static int g_animTick = 0;  /* Animation counter for smooth effects */
+static UINT_PTR g_animTimer = 0; /* Animation timer ID */
+
+typedef struct { wchar_t sourcePath[MAX_PATH]; wchar_t destPath[MAX_PATH]; int moveMode; int aiMode; wchar_t apiKey[256]; } WorkerArgs;
+
 
 static DWORD WINAPI workerThread(LPVOID param) {
     WorkerArgs *args = (WorkerArgs *)param;
