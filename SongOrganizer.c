@@ -1643,8 +1643,6 @@ static void setCurrentFile(const wchar_t *title) {
 }
 
 static DWORD WINAPI workerThread(LPVOID param) {
-
-static DWORD WINAPI workerThread(LPVOID param) {
     WorkerArgs *args = (WorkerArgs *)param;
     if (args->aiMode) runOrganizerByAI(args->sourcePath, args->destPath, args->moveMode, args->apiKey);
     else runOrganizer(args->sourcePath, args->destPath, args->moveMode);
