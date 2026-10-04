@@ -22,7 +22,7 @@ jobs:
         shell: pwsh
         run: |
           $root = Get-ChildItem "$env:RUNNER_TEMP\\llvm-mingw" -Directory | Select-Object -First 1
-          & "$($root.FullName)\\bin\\x86_64-w64-mingw32-clang.exe" -O2 -mwindows -municode SongOrganizer.c -o SongOrganizer.exe -lcomctl32 -lpropsys -lwinhttp -lshell32 -lshlwapi -lole32 -loleaut32 -luuid -luser32 -lgdi32 -lcomdlg32 -ladvapi32
+          & "$($root.FullName)\\bin\\x86_64-w64-mingw32-clang.exe" -O2 -mwindows -municode SongOrganizer.c -o SongOrganizer.exe -lcomctl32 -lpropsys -lwinhttp -lshell32 -lshlwapi -lole32 -loleaut32 -luuid -luser32 -lgdi32 -lcomdlg32 -ladvapi32 -lmsimg32
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Get-Item SongOrganizer.exe | Format-List Name,Length,FullName
       - name: Upload EXE
