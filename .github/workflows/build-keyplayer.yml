@@ -1,0 +1,53 @@
+name: Build KeyPlayer APK
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'keyplayer/KeyPlayer_completed_features.zip'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2"
+
+      - name: Extract KeyPlayer project
+        run: |
+          mkdir -p build-input
+          unzip -q keyplayer/KeyPlayer_completed_features.zip -d build-input
+          test -f build-input/KeyPlayer/gradlew
+          test -f build-input/KeyPlayer/app/build.gradle
+
+      - name: Build debug APK
+        working-directory: build-input/KeyPlayer
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KeyPlayer-debug-APK
+          path: build-input/KeyPlayer/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
