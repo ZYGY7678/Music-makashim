@@ -4,7 +4,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'keyplayer/KeyPlayer_completed_features.zip'
+      - 'KeyPlayer_completed_features.zip'
   workflow_dispatch:
 
 permissions:
@@ -35,7 +35,7 @@ jobs:
       - name: Extract KeyPlayer project
         run: |
           mkdir -p build-input
-          unzip -q keyplayer/KeyPlayer_completed_features.zip -d build-input
+          unzip -q KeyPlayer_completed_features.zip -d build-input
           test -f build-input/KeyPlayer/gradlew
           test -f build-input/KeyPlayer/app/build.gradle
 
